@@ -1,6 +1,7 @@
 package com.liwenqiang.zk;
 
 import org.apache.zookeeper.*;
+import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,19 +13,7 @@ public class Worker implements Watcher {
     private ZooKeeper zk;
     private final String hostPort;
     private final String serverId = Integer.toHexString(new Random().nextInt());
-
-    @Override
-    public void process(WatchedEvent e) {
-        logger.info(e.toString() + "," + hostPort);
-    }
-
-    public Worker(String hostPort) {
-        this.hostPort = hostPort;
-    }
-
-    public void startZK() throws IOException {
-        zk = new ZooKeeper(hostPort, 15000, this);
-    }
+    String name;
 
     AsyncCallback.StringCallback createWorkerCallback = (rc, path, ctx, name) -> {
         switch (KeeperException.Code.get(rc)) {
@@ -39,9 +28,46 @@ public class Worker implements Watcher {
         }
     };
 
+    AsyncCallback.StatCallback statusUpdateCallback = (rc, path, ctx, name) -> {
+        switch (KeeperException.Code.get(rc)) {
+            case CONNECTIONLOSS:
+                updateStatus((String) ctx);
+                break;
+        }
+    };
+
+    String status;
+
+    synchronized private void updateStatus(String status) {
+        if (status.equals(this.status)) {
+            // -1 表示版本号检查
+            zk.setData("/workers/" + name, status.getBytes(), -1, statusUpdateCallback, status);
+        }
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+        updateStatus(status);
+    }
+
+    @Override
+    public void process(WatchedEvent e) {
+        logger.info(e.toString() + "," + hostPort);
+    }
+
+    public Worker(String hostPort) {
+        this.hostPort = hostPort;
+    }
+
+    public void startZK() throws IOException {
+        zk = new ZooKeeper(hostPort, 15000, this);
+    }
+
+
     public void register() {
+        name = "worker-" + serverId;
         zk.create(
-                "/workers/worker-" + serverId,
+                "/workers/worker-" + name,
                 "idle".getBytes(),
                 ZooDefs.Ids.OPEN_ACL_UNSAFE,
                 CreateMode.EPHEMERAL,
@@ -49,6 +75,7 @@ public class Worker implements Watcher {
                 null
         );
     }
+
 
     public static void main(String[] args) throws IOException, InterruptedException {
         Worker w = new Worker(args[0]);
