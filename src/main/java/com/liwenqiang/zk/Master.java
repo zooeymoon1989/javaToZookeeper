@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Random;
 
 public class Master implements Watcher {
@@ -21,6 +22,60 @@ public class Master implements Watcher {
             runForMaster();
         }
     };
+
+
+    public void reassignAndSet(List<String> children) {
+        List<String> toProcess;
+
+        if (workersCache == null) {
+            workersCache = new ChildrenCache(children);
+            toProcess = null;
+        } else {
+            logger.info("Removing and setting");
+            toProcess = workersCache.removedAndSet(children);
+        }
+
+        if (toProcess != null) {
+            for (String worker : toProcess) {
+                getAbsentWorkerTasks(worker);
+            }
+        }
+
+    }
+
+    private void getAbsentWorkerTasks(String worker) {
+        zk.getChildren("/assign/" + worker, false, workerAssignmentCallback, null);
+    }
+
+    AsyncCallback.ChildrenCallback workerAssignmentCallback = (rc, path, ctx, children) -> {
+        switch (KeeperException.Code.get(rc)) {
+            case CONNECTIONLOSS:
+                getAbsentWorkerTasks(path);
+                break;
+            case OK:
+                logger.info("Successfully got a list of assignments: " + children.size() + " tasks");
+                for (String task : children) {
+                    getDataReassign(path + "/" + task, task);
+                }
+                break;
+            default:
+                logger.error("getChildren failed", KeeperException.create(KeeperException.Code.get(rc), path));
+        }
+    };
+
+    private void getDataReassign(String path, String task) {
+        zk.getData(path, false, getDataReassignCallback, task);
+    }
+
+    AsyncCallback.DataCallback getDataReassignCallback = (rc, path, ctx, data, stat) -> {
+        switch (KeeperException.Code.get(rc)) {
+            case CONNECTIONLOSS:
+                getDataReassign(path, (String) ctx);
+                break;
+            case OK:
+                recreateTask()
+        }
+    }
 
     Watcher workersChangeWatcher = e -> {
         if ((e.getType()) == Event.EventType.NodeChildrenChanged) {
