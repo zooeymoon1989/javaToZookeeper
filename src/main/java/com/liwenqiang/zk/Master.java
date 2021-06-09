@@ -73,9 +73,9 @@ public class Master implements Watcher {
                 getDataReassign(path, (String) ctx);
                 break;
             case OK:
-                recreateTask()
+//                recreateTask()
         }
-    }
+    };
 
     Watcher workersChangeWatcher = e -> {
         if ((e.getType()) == Event.EventType.NodeChildrenChanged) {
