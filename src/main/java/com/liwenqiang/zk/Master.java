@@ -85,6 +85,7 @@ public class Master implements Watcher {
                 getDataReassign(path, (String) ctx);
                 break;
             case OK:
+<<<<<<< HEAD
                 recreateTask(new RecreateTaskCtx(path, (String) ctx, data));
         }
     };
@@ -132,7 +133,7 @@ public class Master implements Watcher {
     void recreateTask(RecreateTaskCtx ctx) {
 
         zk.create("/tasks/" + ctx.task, ctx.data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT, recreateTaskCallback, ctx);
-    }
+    };
 
     Watcher workersChangeWatcher = e -> {
         if ((e.getType()) == Event.EventType.NodeChildrenChanged) {
